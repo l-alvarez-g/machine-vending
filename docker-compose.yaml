@@ -1,0 +1,36 @@
+
+services:
+
+  # ---------------------------------------------------------
+  # MICROSERVICIO: machine & HR CONTEXT
+  # ---------------------------------------------------------
+  machine_php:
+    build:
+      context: ./machine-service
+      dockerfile: docker/php/Dockerfile
+    container_name: machine_service_php
+    volumes:
+      - ./machine-service:/var/www/html
+    networks:
+      - vm_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  machine_nginx:
+    image: nginx:alpine
+    container_name: machine_service_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      # Nginx también necesita acceso al código fuente
+      - ./machine-service:/var/www/html
+      # Montamos el archivo de configuración específico de este microservicio
+      - ./machine-service/docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - machine_php
+    networks:
+      - vm_network
+
+networks:
+  vm_network:
+    driver: bridge
