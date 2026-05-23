@@ -1,0 +1,29 @@
+{
+    "name": "enterprise/architecture-skeleton",
+    "description": "Enterprise DDD/CQRS Skeleton using PHP 8.4",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.1",
+        "phpstan/phpstan": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Enterprise\\Shared\\": "src/Shared/",
+            "Enterprise\\Context\\": "src/BoundedContext/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Enterprise\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true
+        }
+    }
+}
