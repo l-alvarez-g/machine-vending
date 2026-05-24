@@ -46,12 +46,11 @@ final class VendingMachineCommand extends Command
         parent::__construct('app:vending-machine');
     }
 
-protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         // 1. Hydrate initial inventory with prices from the catalog
         $hydratedInventory = [];
         foreach ($this->initialInventory as $itemName => $data) {
-            // Only add items that exist in our valid product prices catalog
             if (isset($this->productPrices[$itemName])) {
                 $hydratedInventory[$itemName] = [
                     'price' => $this->productPrices[$itemName],
@@ -60,7 +59,7 @@ protected function execute(InputInterface $input, OutputInterface $output): int
             }
         }
 
-        // 2. Initialize the machine with change and hydrated inventory
+        // 2. Initialize the machine
         $this->serviceMachineHandler->__invoke(new ServiceMachineCommand(
             $this->initialChangeCoins,
             $hydratedInventory
@@ -71,16 +70,15 @@ protected function execute(InputInterface $input, OutputInterface $output): int
         /** @var QuestionHelper $helper */
         $helper = $this->getHelper('question');
 
-        // 3. REPL Loop (Read-Eval-Print Loop)
+        // 3. REPL Loop
         while (true) {
             $question = new Question('> ');
 
             /** @var mixed $answer */
             $answer = $helper->ask($input, $output, $question);
 
-            // PHPStan Level 9: Strict type guards
             if ($answer === null) {
-                break; // EOF or empty interaction
+                break;
             }
 
             if (!is_string($answer)) {
@@ -111,139 +109,24 @@ protected function execute(InputInterface $input, OutputInterface $output): int
             foreach ($tokens as $token) {
                 $tokenUpper = strtoupper($token);
 
-                // Intent recognition: If it is a number, the user is attempting to insert a coin.
+                // --- The Router: Clean, intention-revealing delegation ---
                 if (is_numeric($token)) {
-                    // Strict policy validation (The "Bouncer")
-                    if (in_array($token, $this->validCoins, true)) {
-                        $this->insertCoinHandler->__invoke(new InsertCoinCommand((float) $token));
-                    } else {
-                        // Fail fast with a domain-accurate error message
-                        $output->writeln(sprintf('<error>Invalid coin value: %s</error>', $token));
-                    }
+                    $this->handleInsertCoin($token, $output);
                 } elseif ($tokenUpper === 'RETURN-COIN') {
-                    $returnedCoins = $this->returnCoinsHandler->__invoke(new ReturnCoinsCommand());
-                    $responses[] = $this->formatCoins($returnedCoins);
+                    $responses[] = $this->handleReturnCoin();
                 } elseif (str_starts_with($tokenUpper, 'GET-')) {
-                    $productName = str_replace('GET-', '', $tokenUpper);
-                    $result = $this->vendProductHandler->__invoke(new VendProductCommand($productName));
-
-                    $outputStr = $result->product->name;
-                    $changeStr = $this->formatCoins($result->change);
-                    if ($changeStr !== '') {
-                        $outputStr .= ', ' . $changeStr;
-                    }
-                    $responses[] = $outputStr;
-
-                // Intent recognition: Service Machine
+                    $responses[] = $this->handleVendProduct($tokenUpper);
                 } elseif (preg_match('/^SERVICE\[(.*)\]$/', $tokenUpper, $matches)) {
-                    $payload = $matches[1];
-
-                    $coinsPayload = '';
-                    $inventoryPayload = '';
-
-                    // Smart routing: Detect if both exist, or route to the correct parser
-                    if (str_contains($payload, '|')) {
-                        [$coinsPayload, $inventoryPayload] = explode('|', $payload, 2);
-                    } else {
-                        // If it starts with a letter (A-Z), it is inventory. Otherwise, it is coins.
-                        if (preg_match('/^[A-Z]/', $payload)) {
-                            $inventoryPayload = $payload;
-                        } else {
-                            $coinsPayload = $payload;
-                        }
-                    }
-
-                    // Retrieve current state to merge data in case of partial updates
-                    $currentState = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
-
-                    $coinsToAdd = [];
-                    $inventoryData = [];
-                    $hasError = false;
-
-                    // 1. Parse & Validate Coins
-                    if ($coinsPayload !== '') {
-                        // Normalize validCoins to float for strict comparisons
-                        $validCoinsFloat = array_map('floatval', $this->validCoins);
-
-                        $coinEntries = explode(';', $coinsPayload);
-                        foreach ($coinEntries as $entry) {
-                            $entryParts = explode(':', $entry);
-                            if (count($entryParts) === 2 && is_numeric($entryParts[0]) && is_numeric($entryParts[1])) {
-                                $coinValue = (float) $entryParts[0];
-                                $qty = (int) $entryParts[1];
-
-                                // Strict coin validation (The "Bouncer")
-                                if (!in_array($coinValue, $validCoinsFloat, true)) {
-                                    $output->writeln(sprintf('<error>Service aborted. Invalid coin detected: %s</error>', $entryParts[0]));
-                                    $hasError = true;
-                                    break;
-                                }
-
-                                for ($i = 0; $i < $qty; $i++) {
-                                    $coinsToAdd[] = $coinValue;
-                                }
-                            }
-                        }
-                    } else {
-                        // Preserve current coins if no coin payload is provided
-                        foreach ($currentState->vaultCoins as $valStr => $count) {
-                            for ($i = 0; $i < $count; $i++) {
-                                $coinsToAdd[] = (float) $valStr;
-                            }
-                        }
-                    }
-
-                    if ($hasError) {
-                        continue; // Skip to the next instruction if an error occurred
-                    }
-
-                    // 2. Parse & Validate Inventory
-                    if ($inventoryPayload !== '') {
-                        $itemEntries = explode(';', $inventoryPayload);
-                        foreach ($itemEntries as $entry) {
-                            $entryParts = explode(':', $entry);
-                            if (count($entryParts) === 2 && is_numeric($entryParts[1])) {
-                                $itemName = $entryParts[0]; 
-                                $qty = (int) $entryParts[1];
-
-                                // Strict product validation and configuration price mapping
-                                if (!isset($this->productPrices[$itemName])) {
-                                    $output->writeln(sprintf('<error>Service aborted. Unknown product: %s</error>', $itemName));
-                                    $hasError = true;
-                                    break;
-                                }
-
-                                $inventoryData[$itemName] = [
-                                    'price' => $this->productPrices[$itemName],
-                                    'quantity' => $qty
-                                ];
-                            }
-                        }
-                    } else {
-                        // Preserve current inventory if no inventory payload is provided
-                        $inventoryData = $currentState->inventory;
-                    }
-
-                    if ($hasError) {
-                        continue; // Abort if an invalid product (e.g., "CHORIZO") was provided
-                    }
-
-                    // 3. Dispatch & Render
-                    $this->serviceMachineHandler->__invoke(new ServiceMachineCommand($coinsToAdd, $inventoryData));
-                    $output->writeln('<comment>Machine Serviced successfully.</comment>');
-
-                    $stateAfter = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
-                    $this->printMachineState($output, 'STATE AFTER SERVICE', $stateAfter);
-
+                    $this->handleServiceMachine($matches[1], $output);
                 } elseif ($tokenUpper === 'STATUS') {
-                    $state = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
-                    $this->printMachineState($output, 'CURRENT MACHINE STATE', $state);
-
+                    $this->displayStatus($output, 'CURRENT MACHINE STATE');
                 } else {
                     $output->writeln(sprintf('<error>Unknown command: %s</error>', $token));
                 }
             }
 
+            // Print accumulated responses (like vended products and change)
+            $responses = array_filter($responses); // Remove empty responses
             if ($responses !== []) {
                 $output->writeln(sprintf('-> %s', implode("\n-> ", $responses)));
             }
@@ -251,6 +134,162 @@ protected function execute(InputInterface $input, OutputInterface $output): int
         } catch (DomainException $exception) {
             $output->writeln(sprintf('<error>%s</error>', $exception->getMessage()));
         }
+    }
+
+    // =========================================================================
+    // ACTION HANDLERS
+    // =========================================================================
+
+    private function handleInsertCoin(string $token, OutputInterface $output): void
+    {
+        if (in_array($token, $this->validCoins, true)) {
+            $this->insertCoinHandler->__invoke(new InsertCoinCommand((float) $token));
+            return;
+        }
+
+        $output->writeln(sprintf('<error>Invalid coin value: %s</error>', $token));
+    }
+
+    private function handleReturnCoin(): string
+    {
+        $returnedCoins = $this->returnCoinsHandler->__invoke(new ReturnCoinsCommand());
+        return $this->formatCoins($returnedCoins);
+    }
+
+    private function handleVendProduct(string $tokenUpper): string
+    {
+        $productName = str_replace('GET-', '', $tokenUpper);
+        $result = $this->vendProductHandler->__invoke(new VendProductCommand($productName));
+
+        $outputStr = $result->product->name;
+        $changeStr = $this->formatCoins($result->change);
+
+        if ($changeStr !== '') {
+            $outputStr .= ', ' . $changeStr;
+        }
+
+        return $outputStr;
+    }
+
+    private function handleServiceMachine(string $payload, OutputInterface $output): void
+    {
+        $coinsPayload = '';
+        $inventoryPayload = '';
+
+        // Smart routing for payload
+        if (str_contains($payload, '|')) {
+            [$coinsPayload, $inventoryPayload] = explode('|', $payload, 2);
+        } else {
+            if (preg_match('/^[A-Z]/', $payload)) {
+                $inventoryPayload = $payload;
+            } else {
+                $coinsPayload = $payload;
+            }
+        }
+
+        $currentState = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
+
+        $coinsToAdd = $this->parseServiceCoins($coinsPayload, $currentState, $output);
+        if ($coinsToAdd === null) {
+            return; // Abort if parsing failed
+        }
+
+        $inventoryData = $this->parseServiceInventory($inventoryPayload, $currentState, $output);
+        if ($inventoryData === null) {
+            return; // Abort if parsing failed
+        }
+
+        $this->serviceMachineHandler->__invoke(new ServiceMachineCommand($coinsToAdd, $inventoryData));
+
+        $output->writeln('<comment>Machine Serviced successfully.</comment>');
+        $this->displayStatus($output, 'STATE AFTER SERVICE');
+    }
+
+    // =========================================================================
+    // PAYLOAD PARSERS
+    // =========================================================================
+
+    /**
+     * @return array<int, float>|null Returns null on validation error
+     */
+    private function parseServiceCoins(string $payload, MachineStateDTO $currentState, OutputInterface $output): ?array
+    {
+        $coinsToAdd = [];
+
+        if ($payload === '') {
+            // Preserve current coins
+            foreach ($currentState->vaultCoins as $valStr => $count) {
+                for ($i = 0; $i < $count; $i++) {
+                    $coinsToAdd[] = (float) $valStr;
+                }
+            }
+            return $coinsToAdd;
+        }
+
+        $validCoinsFloat = array_map('floatval', $this->validCoins);
+        $coinEntries = explode(';', $payload);
+
+        foreach ($coinEntries as $entry) {
+            $entryParts = explode(':', $entry);
+            if (count($entryParts) === 2 && is_numeric($entryParts[0]) && is_numeric($entryParts[1])) {
+                $coinValue = (float) $entryParts[0];
+                $qty = (int) $entryParts[1];
+
+                if (!in_array($coinValue, $validCoinsFloat, true)) {
+                    $output->writeln(sprintf('<error>Service aborted. Invalid coin detected: %s</error>', $entryParts[0]));
+                    return null;
+                }
+
+                for ($i = 0; $i < $qty; $i++) {
+                    $coinsToAdd[] = $coinValue;
+                }
+            }
+        }
+
+        return $coinsToAdd;
+    }
+
+    /**
+     * @return array<string, array{price: float, quantity: int}>|null Returns null on validation error
+     */
+    private function parseServiceInventory(string $payload, MachineStateDTO $currentState, OutputInterface $output): ?array
+    {
+        if ($payload === '') {
+            return $currentState->inventory;
+        }
+
+        $inventoryData = [];
+        $itemEntries = explode(';', $payload);
+
+        foreach ($itemEntries as $entry) {
+            $entryParts = explode(':', $entry);
+            if (count($entryParts) === 2 && is_numeric($entryParts[1])) {
+                $itemName = $entryParts[0]; 
+                $qty = (int) $entryParts[1];
+
+                if (!isset($this->productPrices[$itemName])) {
+                    $output->writeln(sprintf('<error>Service aborted. Unknown product: %s</error>', $itemName));
+                    return null;
+                }
+
+                $inventoryData[$itemName] = [
+                    'price' => $this->productPrices[$itemName],
+                    'quantity' => $qty
+                ];
+            }
+        }
+
+        return $inventoryData;
+    }
+
+    // =========================================================================
+    // RENDER HELPERS
+    // =========================================================================
+
+    private function displayStatus(OutputInterface $output, string $title): void
+    {
+        $state = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
+        $this->printMachineState($output, $title, $state);
     }
 
     private function printMachineState(OutputInterface $output, string $title, MachineStateDTO $state): void
