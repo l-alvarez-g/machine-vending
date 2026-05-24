@@ -1,0 +1,24 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use App\VendingMachine\Infrastructure\Controller\Console\VendingMachineCommand;
+use DI\Container;
+use Symfony\Component\Console\Application;
+
+/** @var Container $container */
+$container = require __DIR__ . '/../config/container.php';
+
+$application = new Application('Enterprise Vending Machine', '1.0.0');
+
+// Usamos el contenedor para instanciar el comando, lo que inyecta automáticamente todos los Handlers.
+/** @var VendingMachineCommand $command */
+$command = $container->get(VendingMachineCommand::class);
+
+$application->add($command);
+$application->setDefaultCommand($command->getName(), true);
+
+$application->run();
