@@ -25,13 +25,17 @@ final class VendingMachineCommand extends Command
 {
     /**
      * @param array<int, string> $validCoins
+     * @param array<int, float> $initialChangeCoins
+     * @param array<string, array{price: float, quantity: int}> $initialInventory
      */
     public function __construct(
         private readonly InsertCoinCommandHandler $insertCoinHandler,
         private readonly VendProductCommandHandler $vendProductHandler,
         private readonly ReturnCoinsCommandHandler $returnCoinsHandler,
         private readonly ServiceMachineCommandHandler $serviceMachineHandler,
-        private readonly array $validCoins
+        private readonly array $validCoins,
+        private readonly array $initialChangeCoins,
+        private readonly array $initialInventory
     ) {
         parent::__construct('app:vending-machine');
     }
@@ -40,12 +44,8 @@ final class VendingMachineCommand extends Command
     {
         // 1. Initializing the machine with some change and inventory for the session
         $this->serviceMachineHandler->__invoke(new ServiceMachineCommand(
-            initialChangeCoins: [0.25, 0.25, 0.10, 0.10, 0.05, 0.05],
-            inventory: [
-                'WATER' => ['price' => 0.65, 'quantity' => 10],
-                'JUICE' => ['price' => 1.00, 'quantity' => 10],
-                'SODA'  => ['price' => 1.50, 'quantity' => 10],
-            ]
+            $this->initialChangeCoins,
+            $this->initialInventory
         ));
 
         $output->writeln('<info>Vending Machine Ready. Type EXIT to quit.</info>');
