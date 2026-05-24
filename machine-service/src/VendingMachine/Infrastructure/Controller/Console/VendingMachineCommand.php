@@ -29,7 +29,8 @@ final class VendingMachineCommand extends Command
     /**
      * @param array<int, string> $validCoins
      * @param array<int, float> $initialChangeCoins
-     * @param array<string, array{price: float, quantity: int}> $initialInventory
+     * @param array<string, array{quantity: int}> $initialInventory
+     * @param array<string, float> $productPrices
      */
     public function __construct(
         private readonly InsertCoinCommandHandler $insertCoinHandler,
@@ -39,17 +40,30 @@ final class VendingMachineCommand extends Command
         private readonly GetMachineStateQueryHandler $getMachineStateHandler,
         private readonly array $validCoins,
         private readonly array $initialChangeCoins,
-        private readonly array $initialInventory
+        private readonly array $initialInventory,
+        private readonly array $productPrices
     ) {
         parent::__construct('app:vending-machine');
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        // 1. Initializing the machine with some change and inventory for the session
+        // 1. Hydrate initial inventory with prices from the catalog
+        $hydratedInventory = [];
+        foreach ($this->initialInventory as $itemName => $data) {
+            // Only add items that exist in our valid product prices catalog
+            if (isset($this->productPrices[$itemName])) {
+                $hydratedInventory[$itemName] = [
+                    'price' => $this->productPrices[$itemName],
+                    'quantity' => $data['quantity']
+                ];
+            }
+        }
+
+        // 2. Initialize the machine with change and hydrated inventory
         $this->serviceMachineHandler->__invoke(new ServiceMachineCommand(
             $this->initialChangeCoins,
-            $this->initialInventory
+            $hydratedInventory
         ));
 
         $output->writeln('<info>Vending Machine Ready. Type EXIT to quit.</info>');
@@ -57,7 +71,7 @@ final class VendingMachineCommand extends Command
         /** @var QuestionHelper $helper */
         $helper = $this->getHelper('question');
 
-        // 2. REPL Loop (Read-Eval-Print Loop)
+        // 3. REPL Loop (Read-Eval-Print Loop)
         while (true) {
             $question = new Question('> ');
 
@@ -120,7 +134,7 @@ final class VendingMachineCommand extends Command
                     }
                     $responses[] = $outputStr;
 
-                //Intent recognition: Service Machine
+                // Intent recognition: Service Machine
                 } elseif (preg_match('/^SERVICE\[(.*)\]$/', $tokenUpper, $matches)) {
                     $payload = $matches[1];
 
@@ -139,11 +153,18 @@ final class VendingMachineCommand extends Command
                         }
                     }
 
+                    // Retrieve current state to merge data in case of partial updates
+                    $currentState = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
+
                     $coinsToAdd = [];
                     $inventoryData = [];
+                    $hasError = false;
 
-                    // Parse initial change (Coins)
+                    // 1. Parse & Validate Coins
                     if ($coinsPayload !== '') {
+                        // Normalize validCoins to float for strict comparisons
+                        $validCoinsFloat = array_map('floatval', $this->validCoins);
+
                         $coinEntries = explode(';', $coinsPayload);
                         foreach ($coinEntries as $entry) {
                             $entryParts = explode(':', $entry);
@@ -151,32 +172,66 @@ final class VendingMachineCommand extends Command
                                 $coinValue = (float) $entryParts[0];
                                 $qty = (int) $entryParts[1];
 
+                                // Strict coin validation (The "Bouncer")
+                                if (!in_array($coinValue, $validCoinsFloat, true)) {
+                                    $output->writeln(sprintf('<error>Service aborted. Invalid coin detected: %s</error>', $entryParts[0]));
+                                    $hasError = true;
+                                    break;
+                                }
+
                                 for ($i = 0; $i < $qty; $i++) {
                                     $coinsToAdd[] = $coinValue;
                                 }
                             }
                         }
+                    } else {
+                        // Preserve current coins if no coin payload is provided
+                        foreach ($currentState->vaultCoins as $valStr => $count) {
+                            for ($i = 0; $i < $count; $i++) {
+                                $coinsToAdd[] = (float) $valStr;
+                            }
+                        }
                     }
 
-                    // Parse inventory (Products)
-                    if ($inventoryPayload !== '') {
-                        $standardPrices = ['WATER' => 0.65, 'SODA' => 1.50, 'JUICE' => 1.00];
+                    if ($hasError) {
+                        continue; // Skip to the next instruction if an error occurred
+                    }
 
+                    // 2. Parse & Validate Inventory
+                    if ($inventoryPayload !== '') {
                         $itemEntries = explode(';', $inventoryPayload);
                         foreach ($itemEntries as $entry) {
                             $entryParts = explode(':', $entry);
                             if (count($entryParts) === 2 && is_numeric($entryParts[1])) {
                                 $itemName = $entryParts[0]; 
                                 $qty = (int) $entryParts[1];
-                                $price = $standardPrices[$itemName] ?? 1.00; 
 
-                                $inventoryData[$itemName] = ['price' => $price, 'quantity' => $qty];
+                                // Strict product validation and configuration price mapping
+                                if (!isset($this->productPrices[$itemName])) {
+                                    $output->writeln(sprintf('<error>Service aborted. Unknown product: %s</error>', $itemName));
+                                    $hasError = true;
+                                    break;
+                                }
+
+                                $inventoryData[$itemName] = [
+                                    'price' => $this->productPrices[$itemName],
+                                    'quantity' => $qty
+                                ];
                             }
                         }
+                    } else {
+                        // Preserve current inventory if no inventory payload is provided
+                        $inventoryData = $currentState->inventory;
                     }
 
+                    if ($hasError) {
+                        continue; // Abort if an invalid product (e.g., "CHORIZO") was provided
+                    }
+
+                    // 3. Dispatch & Render
                     $this->serviceMachineHandler->__invoke(new ServiceMachineCommand($coinsToAdd, $inventoryData));
                     $output->writeln('<comment>Machine Serviced successfully.</comment>');
+
                     $stateAfter = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
                     $this->printMachineState($output, 'STATE AFTER SERVICE', $stateAfter);
 
