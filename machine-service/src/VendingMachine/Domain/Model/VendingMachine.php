@@ -126,4 +126,17 @@ final class VendingMachine
         // Re-index array keys just in case, before spreading
         return new MoneyCollection(...array_values($currentVaultCoins));
     }
+
+    /**
+     * @return array<string, array{product: Product, quantity: int}>
+     */
+    public function inventory(): array
+    {
+        return $this->inventory;
+    }
+
+    public function vault(): MoneyCollection
+    {
+        return $this->vault;
+    }
 }

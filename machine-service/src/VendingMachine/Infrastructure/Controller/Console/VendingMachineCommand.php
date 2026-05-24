@@ -12,6 +12,9 @@ use App\VendingMachine\Application\Command\ServiceMachineCommand;
 use App\VendingMachine\Application\Command\ServiceMachineCommandHandler;
 use App\VendingMachine\Application\Command\VendProductCommand;
 use App\VendingMachine\Application\Command\VendProductCommandHandler;
+use App\VendingMachine\Application\Query\GetMachineStateQuery;
+use App\VendingMachine\Application\Query\GetMachineStateQueryHandler;
+use App\VendingMachine\Application\Query\MachineStateDTO;
 use App\VendingMachine\Domain\Model\Coin;
 use App\VendingMachine\Domain\Model\MoneyCollection;
 use DomainException;
@@ -33,6 +36,7 @@ final class VendingMachineCommand extends Command
         private readonly VendProductCommandHandler $vendProductHandler,
         private readonly ReturnCoinsCommandHandler $returnCoinsHandler,
         private readonly ServiceMachineCommandHandler $serviceMachineHandler,
+        private readonly GetMachineStateQueryHandler $getMachineStateHandler,
         private readonly array $validCoins,
         private readonly array $initialChangeCoins,
         private readonly array $initialInventory
@@ -138,7 +142,7 @@ final class VendingMachineCommand extends Command
                     $coinsToAdd = [];
                     $inventoryData = [];
 
-                    // Parse initial change (Coins) -> 0.25:10;0.10:5
+                    // Parse initial change (Coins)
                     if ($coinsPayload !== '') {
                         $coinEntries = explode(';', $coinsPayload);
                         foreach ($coinEntries as $entry) {
@@ -154,7 +158,7 @@ final class VendingMachineCommand extends Command
                         }
                     }
 
-                    // Parse inventory (Products) -> WATER:10;SODA:5
+                    // Parse inventory (Products)
                     if ($inventoryPayload !== '') {
                         $standardPrices = ['WATER' => 0.65, 'SODA' => 1.50, 'JUICE' => 1.00];
 
@@ -173,6 +177,13 @@ final class VendingMachineCommand extends Command
 
                     $this->serviceMachineHandler->__invoke(new ServiceMachineCommand($coinsToAdd, $inventoryData));
                     $output->writeln('<comment>Machine Serviced successfully.</comment>');
+                    $stateAfter = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
+                    $this->printMachineState($output, 'STATE AFTER SERVICE', $stateAfter);
+
+                } elseif ($tokenUpper === 'STATUS') {
+                    $state = $this->getMachineStateHandler->__invoke(new GetMachineStateQuery());
+                    $this->printMachineState($output, 'CURRENT MACHINE STATE', $state);
+
                 } else {
                     $output->writeln(sprintf('<error>Unknown command: %s</error>', $token));
                 }
@@ -185,6 +196,30 @@ final class VendingMachineCommand extends Command
         } catch (DomainException $exception) {
             $output->writeln(sprintf('<error>%s</error>', $exception->getMessage()));
         }
+    }
+
+    private function printMachineState(OutputInterface $output, string $title, MachineStateDTO $state): void
+    {
+        $output->writeln(sprintf("\n<info>=== %s ===</info>", $title));
+
+        $output->writeln('<comment>Vault (Available Change):</comment>');
+        if ($state->vaultCoins === []) {
+            $output->writeln('  [Empty]');
+        } else {
+            foreach ($state->vaultCoins as $val => $count) {
+                $output->writeln(sprintf('  $%s : %d units', $val, $count));
+            }
+        }
+
+        $output->writeln("\n<comment>Inventory:</comment>");
+        if ($state->inventory === []) {
+            $output->writeln('  [Empty]');
+        } else {
+            foreach ($state->inventory as $name => $data) {
+                $output->writeln(sprintf('  %s : %d units ($%.2f)', $name, $data['quantity'], $data['price']));
+            }
+        }
+        $output->writeln("<info>=========================</info>\n");
     }
 
     private function formatCoins(MoneyCollection $collection): string
