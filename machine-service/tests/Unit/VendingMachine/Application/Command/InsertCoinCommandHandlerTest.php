@@ -7,6 +7,7 @@ namespace App\Tests\Unit\VendingMachine\Application\Command;
 use App\VendingMachine\Application\Command\InsertCoinCommand;
 use App\VendingMachine\Application\Command\InsertCoinCommandHandler;
 use App\VendingMachine\Domain\Model\VendingMachine;
+use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -24,7 +25,8 @@ final class InsertCoinCommandHandlerTest extends TestCase
 
     public function testItInsertsCoinAndSavesState(): void
     {
-        $machine = new VendingMachine();
+        $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
+        $machine = new VendingMachine($policy);
 
         $this->repository->expects($this->once())
             ->method('get')

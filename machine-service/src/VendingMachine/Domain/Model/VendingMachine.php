@@ -16,8 +16,9 @@ final class VendingMachine
     /** @var array<string, array{product: Product, quantity: int}> */
     private array $inventory = [];
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly AcceptedCoinsPolicy $acceptedCoinsPolicy
+    ) {
         $this->insertedMoney = MoneyCollection::empty();
         $this->vault = MoneyCollection::empty();
     }
@@ -33,6 +34,10 @@ final class VendingMachine
 
     public function insertCoin(Coin $coin): void
     {
+        // Defense in depth: The Aggregate Root protects its invariants 
+        // by verifying the coin against its acceptance policy before mutating state.
+        $this->acceptedCoinsPolicy->assertIsSatisfiedBy($coin);
+
         $this->insertedMoney = $this->insertedMoney->add($coin);
     }
 
@@ -118,6 +123,7 @@ final class VendingMachine
             }
         }
 
-        return new MoneyCollection(...$currentVaultCoins);
+        // Re-index array keys just in case, before spreading
+        return new MoneyCollection(...array_values($currentVaultCoins));
     }
 }

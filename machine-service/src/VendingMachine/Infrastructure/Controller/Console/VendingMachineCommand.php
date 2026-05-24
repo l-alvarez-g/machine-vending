@@ -23,11 +23,15 @@ use Symfony\Component\Console\Question\Question;
 
 final class VendingMachineCommand extends Command
 {
+    /**
+     * @param array<int, string> $validCoins
+     */
     public function __construct(
         private readonly InsertCoinCommandHandler $insertCoinHandler,
         private readonly VendProductCommandHandler $vendProductHandler,
         private readonly ReturnCoinsCommandHandler $returnCoinsHandler,
-        private readonly ServiceMachineCommandHandler $serviceMachineHandler
+        private readonly ServiceMachineCommandHandler $serviceMachineHandler,
+        private readonly array $validCoins
     ) {
         parent::__construct('app:vending-machine');
     }
@@ -89,8 +93,15 @@ final class VendingMachineCommand extends Command
             foreach ($tokens as $token) {
                 $tokenUpper = strtoupper($token);
 
+                // Intent recognition: If it is a number, the user is attempting to insert a coin.
                 if (is_numeric($token)) {
-                    $this->insertCoinHandler->__invoke(new InsertCoinCommand((float) $token));
+                    // Strict policy validation (The "Bouncer")
+                    if (in_array($token, $this->validCoins, true)) {
+                        $this->insertCoinHandler->__invoke(new InsertCoinCommand((float) $token));
+                    } else {
+                        // Fail fast with a domain-accurate error message
+                        $output->writeln(sprintf('<error>Invalid coin value: %s</error>', $token));
+                    }
                 } elseif ($tokenUpper === 'RETURN-COIN') {
                     $returnedCoins = $this->returnCoinsHandler->__invoke(new ReturnCoinsCommand());
                     $responses[] = $this->formatCoins($returnedCoins);
@@ -107,7 +118,11 @@ final class VendingMachineCommand extends Command
                 } elseif ($tokenUpper === 'SERVICE') {
                     $this->serviceMachineHandler->__invoke(new ServiceMachineCommand(
                         [0.25, 0.25, 0.10, 0.10, 0.05],
-                        ['WATER' => ['price' => 0.65, 'quantity' => 10], 'SODA' => ['price' => 1.50, 'quantity' => 10]]
+                        [
+                            'WATER' => ['price' => 0.65, 'quantity' => 10], 
+                            'SODA'  => ['price' => 1.50, 'quantity' => 10], 
+                            'JUICE' => ['price' => 1.00, 'quantity' => 10]
+                        ]
                     ));
                     $output->writeln('<comment>Machine Serviced.</comment>');
                 } else {

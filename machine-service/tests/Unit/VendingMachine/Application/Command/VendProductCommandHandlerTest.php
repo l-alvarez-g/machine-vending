@@ -7,6 +7,7 @@ namespace App\Tests\Unit\VendingMachine\Application\Command;
 use App\VendingMachine\Application\Command\VendProductCommand;
 use App\VendingMachine\Application\Command\VendProductCommandHandler;
 use App\VendingMachine\Domain\Model\Coin;
+use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
 use App\VendingMachine\Domain\Model\MoneyCollection;
 use App\VendingMachine\Domain\Model\Product;
 use App\VendingMachine\Domain\Model\VendingMachine;
@@ -27,7 +28,8 @@ final class VendProductCommandHandlerTest extends TestCase
 
     public function testItVendsProductAndSavesState(): void
     {
-        $machine = new VendingMachine();
+        $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
+        $machine = new VendingMachine($policy);
 
         $machine->serviceMachine(
             new MoneyCollection(new Coin(0.25), new Coin(0.25)),

@@ -7,6 +7,7 @@ namespace App\Tests\Unit\VendingMachine\Domain\Model;
 use App\VendingMachine\Domain\Exception\InsufficientFundsException;
 use App\VendingMachine\Domain\Exception\OutOfStockException;
 use App\VendingMachine\Domain\Model\Coin;
+use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
 use App\VendingMachine\Domain\Model\MoneyCollection;
 use App\VendingMachine\Domain\Model\Product;
 use App\VendingMachine\Domain\Model\VendingMachine;
@@ -19,7 +20,8 @@ final class VendingMachineTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->machine = new VendingMachine();
+        $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
+        $this->machine = new VendingMachine($policy);
         $this->soda = new Product('Soda', 1.50);
 
         // Service the machine with 1 Soda and some initial change (two 0.25 coins)

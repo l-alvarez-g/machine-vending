@@ -25,19 +25,33 @@ final class CoinTest extends TestCase
     public static function validCoinsProvider(): array
     {
         return [
-            'Nickel'  => [0.05, 5],
-            'Dime'    => [0.10, 10],
-            'Quarter' => [0.25, 25],
-            'Dollar'  => [1.0, 100],
+            'Nickel'      => [0.05, 5],
+            'Dime'        => [0.10, 10],
+            'Quarter'     => [0.25, 25],
+            'Half Dollar' => [0.50, 50], // Proving the new domain flexibility
+            'Dollar'      => [1.0, 100],
             'Dollar as Integer (1.0 casted)' => [1, 100],
         ];
     }
 
-    public function testItThrowsExceptionForInvalidCoin(): void
+    #[DataProvider('invalidCoinsProvider')]
+    public function testItThrowsExceptionForInvalidCoin(float $invalidValue): void
     {
         $this->expectException(InvalidCoinException::class);
-        $this->expectExceptionMessage('Invalid coin value: 0.5');
+        $this->expectExceptionMessage(sprintf('Invalid coin value: %s', $invalidValue));
 
-        new Coin(0.50);
+        new Coin($invalidValue);
+    }
+
+    /**
+     * @return array<string, array{0: float|int}>
+     */
+    public static function invalidCoinsProvider(): array
+    {
+        return [
+            'Zero value'     => [0.0],
+            'Negative value' => [-0.25],
+            'Deep negative'  => [-5.0],
+        ];
     }
 }

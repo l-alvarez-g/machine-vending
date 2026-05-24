@@ -8,6 +8,7 @@ use App\VendingMachine\Application\Command\ServiceMachineCommand;
 use App\VendingMachine\Application\Command\ServiceMachineCommandHandler;
 use App\VendingMachine\Domain\Model\Coin;
 use App\VendingMachine\Domain\Model\VendingMachine;
+use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -25,7 +26,8 @@ final class ServiceMachineCommandHandlerTest extends TestCase
 
     public function testItServicesMachineAndSavesState(): void
     {
-        $machine = new VendingMachine();
+        $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
+        $machine = new VendingMachine($policy);
 
         $this->repository->expects($this->once())
             ->method('get')

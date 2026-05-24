@@ -8,6 +8,7 @@ use App\VendingMachine\Application\Command\ReturnCoinsCommand;
 use App\VendingMachine\Application\Command\ReturnCoinsCommandHandler;
 use App\VendingMachine\Domain\Model\Coin;
 use App\VendingMachine\Domain\Model\VendingMachine;
+use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -25,7 +26,8 @@ final class ReturnCoinsCommandHandlerTest extends TestCase
 
     public function testItReturnsCoinsAndSavesState(): void
     {
-        $machine = new VendingMachine();
+        $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
+        $machine = new VendingMachine($policy);
         $machine->insertCoin(new Coin(0.25));
         $machine->insertCoin(new Coin(0.10));
 
