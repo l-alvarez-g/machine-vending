@@ -115,16 +115,64 @@ final class VendingMachineCommand extends Command
                         $outputStr .= ', ' . $changeStr;
                     }
                     $responses[] = $outputStr;
-                } elseif ($tokenUpper === 'SERVICE') {
-                    $this->serviceMachineHandler->__invoke(new ServiceMachineCommand(
-                        [0.25, 0.25, 0.10, 0.10, 0.05],
-                        [
-                            'WATER' => ['price' => 0.65, 'quantity' => 10], 
-                            'SODA'  => ['price' => 1.50, 'quantity' => 10], 
-                            'JUICE' => ['price' => 1.00, 'quantity' => 10]
-                        ]
-                    ));
-                    $output->writeln('<comment>Machine Serviced.</comment>');
+
+                //Intent recognition: Service Machine
+                } elseif (preg_match('/^SERVICE\[(.*)\]$/', $tokenUpper, $matches)) {
+                    $payload = $matches[1];
+
+                    $coinsPayload = '';
+                    $inventoryPayload = '';
+
+                    // Smart routing: Detect if both exist, or route to the correct parser
+                    if (str_contains($payload, '|')) {
+                        [$coinsPayload, $inventoryPayload] = explode('|', $payload, 2);
+                    } else {
+                        // If it starts with a letter (A-Z), it is inventory. Otherwise, it is coins.
+                        if (preg_match('/^[A-Z]/', $payload)) {
+                            $inventoryPayload = $payload;
+                        } else {
+                            $coinsPayload = $payload;
+                        }
+                    }
+
+                    $coinsToAdd = [];
+                    $inventoryData = [];
+
+                    // Parse initial change (Coins) -> 0.25:10;0.10:5
+                    if ($coinsPayload !== '') {
+                        $coinEntries = explode(';', $coinsPayload);
+                        foreach ($coinEntries as $entry) {
+                            $entryParts = explode(':', $entry);
+                            if (count($entryParts) === 2 && is_numeric($entryParts[0]) && is_numeric($entryParts[1])) {
+                                $coinValue = (float) $entryParts[0];
+                                $qty = (int) $entryParts[1];
+
+                                for ($i = 0; $i < $qty; $i++) {
+                                    $coinsToAdd[] = $coinValue;
+                                }
+                            }
+                        }
+                    }
+
+                    // Parse inventory (Products) -> WATER:10;SODA:5
+                    if ($inventoryPayload !== '') {
+                        $standardPrices = ['WATER' => 0.65, 'SODA' => 1.50, 'JUICE' => 1.00];
+
+                        $itemEntries = explode(';', $inventoryPayload);
+                        foreach ($itemEntries as $entry) {
+                            $entryParts = explode(':', $entry);
+                            if (count($entryParts) === 2 && is_numeric($entryParts[1])) {
+                                $itemName = $entryParts[0]; 
+                                $qty = (int) $entryParts[1];
+                                $price = $standardPrices[$itemName] ?? 1.00; 
+
+                                $inventoryData[$itemName] = ['price' => $price, 'quantity' => $qty];
+                            }
+                        }
+                    }
+
+                    $this->serviceMachineHandler->__invoke(new ServiceMachineCommand($coinsToAdd, $inventoryData));
+                    $output->writeln('<comment>Machine Serviced successfully.</comment>');
                 } else {
                     $output->writeln(sprintf('<error>Unknown command: %s</error>', $token));
                 }
