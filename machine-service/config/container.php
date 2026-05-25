@@ -5,10 +5,11 @@ declare(strict_types=1);
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 use App\VendingMachine\Infrastructure\Persistence\InMemoryVendingMachineRepository;
 use App\VendingMachine\Infrastructure\Controller\Console\VendingMachineCommand;
+use App\VendingMachine\Infrastructure\Controller\Console\Parser\ServicePayloadParser;
+use App\VendingMachine\Infrastructure\Controller\Console\Action\InsertCoinAction;
+
 use DI\ContainerBuilder;
 use function DI\create;
-use function DI\autowire;
-use function DI\get;
 
 $builder = new ContainerBuilder();
 
@@ -31,8 +32,21 @@ $builder->addDefinitions([
 
 
 
-    VendingMachineCommand::class => autowire(VendingMachineCommand::class)
-        ->constructorParameter('validCoins', get('app.config.valid_coins'))
+    ServicePayloadParser::class => \DI\autowire()
+        ->constructorParameter('validCoins', \DI\get('app.config.valid_coins'))
+        ->constructorParameter('productPrices', \DI\get('app.config.product_prices')),
+
+    InsertCoinAction::class => \DI\autowire()
+        ->constructorParameter('validCoins', \DI\get('app.config.valid_coins')),
+
+    VendingMachineCommand::class => \DI\autowire()
+        ->constructorParameter('actions', [
+            \DI\get(\App\VendingMachine\Infrastructure\Controller\Console\Action\InsertCoinAction::class),
+            \DI\get(\App\VendingMachine\Infrastructure\Controller\Console\Action\ReturnCoinAction::class),
+            \DI\get(\App\VendingMachine\Infrastructure\Controller\Console\Action\VendProductAction::class),
+            \DI\get(\App\VendingMachine\Infrastructure\Controller\Console\Action\ServiceMachineAction::class),
+            \DI\get(\App\VendingMachine\Infrastructure\Controller\Console\Action\StatusAction::class),
+        ])
         ->constructorParameter('initialChangeCoins', \DI\get('app.config.initial_change'))
         ->constructorParameter('initialInventory', \DI\get('app.config.initial_inventory'))
         ->constructorParameter('productPrices', \DI\get('app.config.product_prices')),
