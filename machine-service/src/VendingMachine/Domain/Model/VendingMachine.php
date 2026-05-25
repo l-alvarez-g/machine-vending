@@ -6,6 +6,7 @@ namespace App\VendingMachine\Domain\Model;
 
 use App\VendingMachine\Domain\Exception\InsufficientFundsException;
 use App\VendingMachine\Domain\Exception\OutOfStockException;
+use App\VendingMachine\Domain\Exception\ExactChangeNotAvailableException;
 use DomainException;
 
 final class VendingMachine
@@ -95,7 +96,7 @@ final class VendingMachine
         }
 
         if ($remaining > 0) {
-            throw new DomainException('Machine does not have exact change available');
+            throw new ExactChangeNotAvailableException('Machine does not have exact change available');
         }
 
         return new MoneyCollection(...$changeCoins);
