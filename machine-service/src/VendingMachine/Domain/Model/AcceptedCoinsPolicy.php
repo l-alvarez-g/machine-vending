@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\VendingMachine\Domain\Model;
 
 use App\VendingMachine\Domain\Exception\InvalidCoinException;
+use InvalidArgumentException;
 
 final readonly class AcceptedCoinsPolicy
 {
     /**
      * @param array<int, int> $validCoinsInCents
+     * @throws InvalidArgumentException
      */
     public function __construct(
         private array $validCoinsInCents
     ) {
+        $this->assertValidConfiguration($validCoinsInCents);
     }
 
     /**
@@ -21,20 +24,37 @@ final readonly class AcceptedCoinsPolicy
      */
     public function isSatisfiedBy(Coin $coin): bool
     {
-        return in_array($coin->amountInCents, $this->validCoinsInCents, true);
+        // Ahora consumimos el método de acceso estructurado
+        return in_array($coin->amountInCents(), $this->validCoinsInCents, true);
     }
 
     /**
      * Asserts that the coin is accepted, throwing a domain exception otherwise.
-     * 
-     * @throws InvalidCoinException
+     * * @throws InvalidCoinException
      */
     public function assertIsSatisfiedBy(Coin $coin): void
     {
         if (!$this->isSatisfiedBy($coin)) {
-            throw new InvalidCoinException(
-                sprintf('The machine does not accept the coin value: %s', $coin->amount())
-            );
+            throw InvalidCoinException::forUnacceptedCoin($coin->amountInCents());
+        }
+    }
+
+    /**
+     * @param array<int, int> $validCoins
+     * @throws InvalidArgumentException
+     */
+    private function assertValidConfiguration(array $validCoins): void
+    {
+        if ($validCoins === []) {
+            throw new InvalidArgumentException('The accepted coins policy must contain at least one valid coin denomination.');
+        }
+
+        foreach ($validCoins as $coinValue) {
+            if ($coinValue <= 0) {
+                throw new InvalidArgumentException(
+                    sprintf('Invalid coin denomination: %d. Must be strictly positive.', $coinValue)
+                );
+            }
         }
     }
 }

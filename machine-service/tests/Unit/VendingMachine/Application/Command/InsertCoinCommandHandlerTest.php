@@ -36,7 +36,7 @@ final class InsertCoinCommandHandlerTest extends TestCase
             ->method('save')
             ->with($this->equalTo($machine));
 
-        $command = new InsertCoinCommand(1.0);
+        $command = new InsertCoinCommand(100);
         $this->handler->__invoke($command);
 
         $this->assertSame(100, $machine->returnCoins()->totalInCents());

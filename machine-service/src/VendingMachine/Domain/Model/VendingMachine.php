@@ -7,7 +7,8 @@ namespace App\VendingMachine\Domain\Model;
 use App\VendingMachine\Domain\Exception\InsufficientFundsException;
 use App\VendingMachine\Domain\Exception\OutOfStockException;
 use App\VendingMachine\Domain\Exception\ExactChangeNotAvailableException;
-use DomainException;
+// Hypothetical Domain Event interface
+// use App\Shared\Domain\Event\DomainEvent; 
 
 final class VendingMachine
 {
@@ -17,11 +18,20 @@ final class VendingMachine
     /** @var array<string, array{product: Product, quantity: int}> */
     private array $inventory = [];
 
+    /** @var array<int, object> List of Domain Events recorded by the Aggregate */
+    private array $domainEvents = [];
+
     public function __construct(
+        private readonly string $id, // Identity is mandatory for an Aggregate Root
         private readonly AcceptedCoinsPolicy $acceptedCoinsPolicy
     ) {
         $this->insertedMoney = MoneyCollection::empty();
         $this->vault = MoneyCollection::empty();
+    }
+
+    public function id(): string
+    {
+        return $this->id;
     }
 
     /**
@@ -31,14 +41,13 @@ final class VendingMachine
     {
         $this->vault = $initialChange;
         $this->inventory = $inventory;
+
+        // Example: $this->record(new MachineServicedEvent($this->id));
     }
 
     public function insertCoin(Coin $coin): void
     {
-        // Defense in depth: The Aggregate Root protects its invariants 
-        // by verifying the coin against its acceptance policy before mutating state.
         $this->acceptedCoinsPolicy->assertIsSatisfiedBy($coin);
-
         $this->insertedMoney = $this->insertedMoney->add($coin);
     }
 
@@ -53,24 +62,27 @@ final class VendingMachine
     public function vendProduct(string $productName): VendResult
     {
         if (!isset($this->inventory[$productName]) || $this->inventory[$productName]['quantity'] <= 0) {
-            throw new OutOfStockException(sprintf('Product %s is out of stock', $productName));
+            throw OutOfStockException::forProduct($productName);
         }
 
         $product = $this->inventory[$productName]['product'];
         $insertedTotal = $this->insertedMoney->totalInCents();
 
-        if ($insertedTotal < $product->priceInCents) {
-            throw new InsufficientFundsException('Not enough money inserted');
+        if ($insertedTotal < $product->priceInCents()) {
+            throw InsufficientFundsException::forTransaction($insertedTotal, $product->priceInCents());
         }
 
-        $changeAmount = $insertedTotal - $product->priceInCents;
+        $changeAmount = $insertedTotal - $product->priceInCents();
         $changeToReturn = $this->calculateChange($changeAmount);
 
-        // Update state: decrease stock, reset inserted money, add inserted to vault, remove change from vault
+        // Update state
         $this->inventory[$productName]['quantity']--;
         $this->vault = $this->vaultAdd($this->insertedMoney);
         $this->vault = $this->vaultSubtract($changeToReturn);
         $this->insertedMoney = MoneyCollection::empty();
+
+        // CQRS / Event Sourcing foundation: Record that something important happened in the business
+        // $this->record(new ProductVendedEvent($this->id, $productName, $product->priceInCents()));
 
         return new VendResult($product, $changeToReturn);
     }
@@ -84,19 +96,18 @@ final class VendingMachine
         $changeCoins = [];
         $remaining = $changeNeededInCents;
 
-        // Sort vault coins descending to give larger coins first
         $availableCoins = $this->vault->coins();
-        usort($availableCoins, fn(Coin $a, Coin $b) => $b->amountInCents <=> $a->amountInCents);
+        usort($availableCoins, static fn(Coin $a, Coin $b): int => $b->amountInCents() <=> $a->amountInCents());
 
         foreach ($availableCoins as $coin) {
-            if ($remaining >= $coin->amountInCents) {
+            if ($remaining >= $coin->amountInCents()) {
                 $changeCoins[] = $coin;
-                $remaining -= $coin->amountInCents;
+                $remaining -= $coin->amountInCents();
             }
         }
 
         if ($remaining > 0) {
-            throw new ExactChangeNotAvailableException('Machine does not have exact change available');
+            throw ExactChangeNotAvailableException::forAmount($remaining);
         }
 
         return new MoneyCollection(...$changeCoins);
@@ -117,14 +128,13 @@ final class VendingMachine
 
         foreach ($collectionToSubtract->coins() as $coinToRemove) {
             foreach ($currentVaultCoins as $index => $vaultCoin) {
-                if ($vaultCoin->amountInCents === $coinToRemove->amountInCents) {
+                if ($vaultCoin->amountInCents() === $coinToRemove->amountInCents()) {
                     unset($currentVaultCoins[$index]);
-                    break;
+                    break; // Break inner loop only
                 }
             }
         }
 
-        // Re-index array keys just in case, before spreading
         return new MoneyCollection(...array_values($currentVaultCoins));
     }
 
@@ -139,5 +149,24 @@ final class VendingMachine
     public function vault(): MoneyCollection
     {
         return $this->vault;
+    }
+
+    /**
+     * Records a domain event to be dispatched later by the application layer or infrastructure.
+     */
+    private function record(object $domainEvent): void
+    {
+        $this->domainEvents[] = $domainEvent;
+    }
+
+    /**
+     * Retrieves and clears the recorded domain events.
+     * * @return array<int, object>
+     */
+    public function pullDomainEvents(): array
+    {
+        $events = $this->domainEvents;
+        $this->domainEvents = [];
+        return $events;
     }
 }

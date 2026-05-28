@@ -8,22 +8,48 @@ use App\VendingMachine\Domain\Exception\InvalidCoinException;
 
 final readonly class Coin
 {
-    public int $amountInCents;
+    /**
+     * @throws InvalidCoinException
+     */
+    public function __construct(
+        private int $amountInCents
+    ) {
+        if ($this->amountInCents <= 0) {
+           throw InvalidCoinException::forInvalidDenomination($this->amountInCents);
+        }
+    }
 
-    public function __construct(float $amount)
+    /**
+     * Creates a Coin from a float value safely.
+     * * @throws InvalidCoinException
+     */
+    public static function fromFloat(float $amount): self
     {
-        // A physical coin must have a positive value. 
-        // Regional validity (e.g., 0.05, 0.25) is now enforced at the application/infrastructure boundary.
         if ($amount <= 0.0) {
-            throw new InvalidCoinException(sprintf('Invalid coin value: %s', $amount));
+            throw InvalidCoinException::forInvalidDenomination((int) round($amount * 100));
         }
 
-        // Safe conversion to cents avoiding float precision loss
-        $this->amountInCents = (int) round($amount * 100);
+        return new self((int) round($amount * 100));
+    }
+
+    /**
+     * Accessor method for the internal value in cents.
+     */
+    public function amountInCents(): int
+    {
+        return $this->amountInCents;
     }
 
     public function amount(): float
     {
         return $this->amountInCents / 100;
+    }
+
+    /**
+     * Value Objects must be structurally comparable.
+     */
+    public function equals(self $other): bool
+    {
+        return $this->amountInCents === $other->amountInCents();
     }
 }

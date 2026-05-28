@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Tests\Unit\VendingMachine\Domain\Model;
@@ -12,8 +13,8 @@ final class MoneyCollectionTest extends TestCase
     public function testItCalculatesTotalCorrectly(): void
     {
         $collection = new MoneyCollection(
-            new Coin(1.00),
-            new Coin(0.25)
+            new Coin(100),
+            new Coin(25) // Fixed: Removed leading zero to prevent octal evaluation (was 025 -> 21)
         );
 
         $this->assertSame(125, $collection->totalInCents());
@@ -22,8 +23,8 @@ final class MoneyCollectionTest extends TestCase
 
     public function testItIsImmutableWhenAddingCoins(): void
     {
-        $initialCollection = new MoneyCollection(new Coin(0.10));
-        $newCollection = $initialCollection->add(new Coin(0.25));
+        $initialCollection = new MoneyCollection(new Coin(10)); // Fixed: Removed leading zero (was 010 -> 8)
+        $newCollection = $initialCollection->add(new Coin(25));
 
         $this->assertNotSame($initialCollection, $newCollection);
         $this->assertSame(10, $initialCollection->totalInCents());
