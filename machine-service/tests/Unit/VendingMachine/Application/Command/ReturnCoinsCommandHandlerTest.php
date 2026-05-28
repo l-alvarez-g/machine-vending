@@ -6,6 +6,7 @@ namespace App\Tests\Unit\VendingMachine\Application\Command;
 
 use App\VendingMachine\Application\Command\ReturnCoinsCommand;
 use App\VendingMachine\Application\Command\ReturnCoinsCommandHandler;
+use App\VendingMachine\Application\Command\ReturnCoinsResponse;
 use App\VendingMachine\Domain\Model\Coin;
 use App\VendingMachine\Domain\Model\VendingMachine;
 use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
@@ -26,23 +27,35 @@ final class ReturnCoinsCommandHandlerTest extends TestCase
 
     public function testItReturnsCoinsAndSavesState(): void
     {
+        $machineId = 'vm-uuid-001';
         $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
-        $machine = new VendingMachine($policy);
-        $machine->insertCoin(new Coin(0.25));
-        $machine->insertCoin(new Coin(0.10));
+        $machine = new VendingMachine($machineId, $policy);
 
+        // Supplying internal state directly with pure integer constructors
+        $machine->insertCoin(new Coin(25));
+        $machine->insertCoin(new Coin(10));
+
+        // Expectation: Retrieve by specific ID
         $this->repository->expects($this->once())
             ->method('get')
+            ->with($machineId)
             ->willReturn($machine);
 
+        // Expectation: Persist the identical instance
         $this->repository->expects($this->once())
             ->method('save')
-            ->with($this->equalTo($machine));
+            ->with($this->identicalTo($machine));
 
-        $command = new ReturnCoinsCommand();
-        $returnedCoins = $this->handler->__invoke($command);
+        $command = new ReturnCoinsCommand($machineId);
 
-        $this->assertSame(35, $returnedCoins->totalInCents());
+        /** @var ReturnCoinsResponse $response */
+        $response = $this->handler->__invoke($command);
+
+        // Asserting against the Application DTO (floats), not the Domain Model
+        $this->assertInstanceOf(ReturnCoinsResponse::class, $response);
+        $this->assertSame(0.35, $response->totalReturned);
+
+        // Asserting internal state was cleared correctly
         $this->assertSame(0, $machine->returnCoins()->totalInCents());
     }
 }

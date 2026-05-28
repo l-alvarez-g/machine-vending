@@ -7,10 +7,12 @@ namespace App\VendingMachine\Application\Command;
 final readonly class ServiceMachineCommand
 {
     /**
-     * @param float[] $initialChangeCoins
+     * @param string $machineId
+     * @param list<float> $initialChangeCoins
      * @param array<string, array{price: float, quantity: int}> $inventory
      */
     public function __construct(
+        public string $machineId,
         public array $initialChangeCoins,
         public array $inventory
     ) {

@@ -6,7 +6,9 @@ namespace App\VendingMachine\Application\Command;
 
 final readonly class InsertCoinCommand
 {
-    public function __construct(public float $amount)
-    {
+    public function __construct(
+        public string $machineId,
+        public float $amount
+    ) {
     }
 }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\VendingMachine\Application\Command;
 
-use App\VendingMachine\Domain\Model\VendResult;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 
 final readonly class VendProductCommandHandler
@@ -14,14 +13,22 @@ final readonly class VendProductCommandHandler
     ) {
     }
 
-    public function __invoke(VendProductCommand $command): VendResult
+    public function __invoke(VendProductCommand $command): VendProductResponse
     {
-        $machine = $this->repository->get();
+        // 1. Hydrate the specific aggregate
+        $machine = $this->repository->get($command->machineId);
 
-        $result = $machine->vendProduct($command->productName);
+        // 2. Delegate the business action to the Domain
+        $domainResult = $machine->vendProduct($command->productName);
 
+        // 3. Persist state changes
         $this->repository->save($machine);
 
-        return $result;
+        // 4. Translate Domain Model to Application DTO protecting architectural boundaries
+        return new VendProductResponse(
+            $domainResult->product()->name(),
+            $domainResult->product()->price(),
+            $domainResult->change()->totalInCents() / 100
+        );
     }
 }
