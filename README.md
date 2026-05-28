@@ -74,6 +74,13 @@ Once the machine is initialized and ready, you can input commands separated by c
 -> SODA, 0.25, 0.25
 ```
 
+**Example 5: Multi-Step Purchase Workflow**
+```text
+> 1
+> GET-JUICE
+-> JUICE
+```
+
 ---
 
 ## 🔧 Service & Maintenance Commands (Operator)
