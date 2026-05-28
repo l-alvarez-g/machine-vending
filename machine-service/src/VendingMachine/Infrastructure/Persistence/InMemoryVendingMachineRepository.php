@@ -4,27 +4,37 @@ declare(strict_types=1);
 
 namespace App\VendingMachine\Infrastructure\Persistence;
 
-use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
+use App\VendingMachine\Domain\Exception\VendingMachineNotFoundException;
 use App\VendingMachine\Domain\Model\VendingMachine;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 
 final class InMemoryVendingMachineRepository implements VendingMachineRepositoryInterface
 {
-    private ?VendingMachine $machine = null;
+    /**
+     * @var array<string, VendingMachine>
+     */
+    private array $machines = [];
 
-    public function get(): VendingMachine
+    /**
+     * Retrieves a VendingMachine by its unique identifier.
+     *
+     * @throws VendingMachineNotFoundException
+     */
+    public function get(string $id): VendingMachine
     {
-        if ($this->machine === null) {
-            // We inject the default US coin policy for the in-memory persistence layer
-            $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
-            $this->machine = new VendingMachine($policy);
+        if (!array_key_exists($id, $this->machines)) {
+            throw VendingMachineNotFoundException::withId($id);
         }
 
-        return $this->machine;
+        return $this->machines[$id];
     }
 
+    /**
+     * Persists the VendingMachine aggregate state.
+     */
     public function save(VendingMachine $vendingMachine): void
     {
-        $this->machine = $vendingMachine;
+        // We use the Aggregate Root's identity as the storage key
+        $this->machines[$vendingMachine->id()] = $vendingMachine;
     }
 }

@@ -9,14 +9,19 @@ use InvalidArgumentException;
 
 final readonly class ServicePayloadParser
 {
+    /** @var array<int, float> */
+    private array $validCoinsFloat;
+
     /**
-     * @param array<int, string|float> $validCoins
+     * @param array<int, string> $validCoins Array of raw config strings (e.g. ['0.05', '1.00'])
      * @param array<string, float> $productPrices
      */
     public function __construct(
         private array $validCoins,
         private array $productPrices
     ) {
+        // Pre-compute float values once for performance and strict type checking
+        $this->validCoinsFloat = array_map('floatval', $this->validCoins);
     }
 
     /**
@@ -31,7 +36,8 @@ final readonly class ServicePayloadParser
         if (str_contains($payload, '|')) {
             [$coinsPayload, $inventoryPayload] = explode('|', $payload, 2);
         } else {
-            if (preg_match('/^[A-Z]/', $payload)) {
+            // If it starts with a letter, assume it's an inventory payload
+            if (preg_match('/^[A-Z]/i', $payload)) {
                 $inventoryPayload = $payload;
             } else {
                 $coinsPayload = $payload;
@@ -39,7 +45,7 @@ final readonly class ServicePayloadParser
         }
 
         return [
-            'coins' => $this->parseCoins($coinsPayload, $currentState),
+            'coins'     => $this->parseCoins($coinsPayload, $currentState),
             'inventory' => $this->parseInventory($inventoryPayload, $currentState)
         ];
     }
@@ -51,6 +57,7 @@ final readonly class ServicePayloadParser
     {
         $coinsToAdd = [];
 
+        // If no coin payload is provided, preserve current vault state
         if ($payload === '') {
             foreach ($currentState->vaultCoins as $valStr => $count) {
                 for ($i = 0; $i < $count; $i++) {
@@ -60,7 +67,6 @@ final readonly class ServicePayloadParser
             return $coinsToAdd;
         }
 
-        $validCoinsFloat = array_map('floatval', $this->validCoins);
         $coinEntries = explode(';', $payload);
 
         foreach ($coinEntries as $entry) {
@@ -69,7 +75,9 @@ final readonly class ServicePayloadParser
                 $coinValue = (float) $entryParts[0];
                 $qty = (int) $entryParts[1];
 
-                if (!in_array($coinValue, $validCoinsFloat, true)) {
+                // Strict check against the pre-computed valid float values.
+                // This safely allows a user to input "1" and match the config "1.00".
+                if (!in_array($coinValue, $this->validCoinsFloat, true)) {
                     throw new InvalidArgumentException(sprintf('Invalid coin detected: %s', $entryParts[0]));
                 }
 
@@ -87,6 +95,7 @@ final readonly class ServicePayloadParser
      */
     private function parseInventory(string $payload, MachineStateDTO $currentState): array
     {
+        // If no inventory payload is provided, preserve current inventory state
         if ($payload === '') {
             return $currentState->inventory;
         }
@@ -97,7 +106,7 @@ final readonly class ServicePayloadParser
         foreach ($itemEntries as $entry) {
             $entryParts = explode(':', $entry);
             if (count($entryParts) === 2 && is_numeric($entryParts[1])) {
-                $itemName = $entryParts[0]; 
+                $itemName = strtoupper(trim($entryParts[0]));
                 $qty = (int) $entryParts[1];
 
                 if (!isset($this->productPrices[$itemName])) {
@@ -105,7 +114,7 @@ final readonly class ServicePayloadParser
                 }
 
                 $inventoryData[$itemName] = [
-                    'price' => $this->productPrices[$itemName],
+                    'price'    => $this->productPrices[$itemName],
                     'quantity' => $qty
                 ];
             }

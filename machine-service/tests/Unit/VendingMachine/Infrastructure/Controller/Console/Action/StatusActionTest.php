@@ -19,21 +19,22 @@ final class StatusActionTest extends TestCase
     private VendingMachineRepositoryInterface&MockObject $repositoryMock;
     private OutputInterface&MockObject $outputMock;
     private StatusAction $action;
+    private const MACHINE_ID = 'cli-machine-001';
 
     protected function setUp(): void
     {
-        // 1. Mock the Infrastructure boundary
+        // 1. Mock the infrastructure boundary
         $this->repositoryMock = $this->createMock(VendingMachineRepositoryInterface::class);
         $this->outputMock = $this->createMock(OutputInterface::class);
 
-        // 2. Instantiate the REAL Application layer query handler
+        // 2. Instantiate the real application layer query handler
         $queryHandler = new GetMachineStateQueryHandler($this->repositoryMock);
 
-        // 3. Instantiate the REAL Presenter
+        // 3. Instantiate the real presenter
         $presenter = new VendingMachinePresenter();
 
-        // 4. Instantiate the Console Action
-        $this->action = new StatusAction($queryHandler, $presenter);
+        // 4. Inject the machine ID into the action
+        $this->action = new StatusAction($queryHandler, $presenter, self::MACHINE_ID);
     }
 
     public function testItSupportsStatusToken(): void
@@ -44,16 +45,17 @@ final class StatusActionTest extends TestCase
 
     public function testItQueriesStateAndDelegatesToPresenter(): void
     {
-        // 1. Instantiate the REAL VendingMachine (fresh and empty)
+        // 1. Instantiate the real vending machine with its ID
         $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
-        $realMachine = new VendingMachine($policy);
+        $realMachine = new VendingMachine(self::MACHINE_ID, $policy);
 
-        // 2. The query handler will fetch this machine from the repository
+        // 2. Verify the query handler requests the machine with the correct ID
         $this->repositoryMock->expects(self::once())
             ->method('get')
+            ->with(self::MACHINE_ID)
             ->willReturn($realMachine);
 
-        // 3. Expect the output mock to receive exactly the 6 lines printed by the REAL presenter
+        // 3. Verify the output formatting
         $this->outputMock->expects(self::exactly(6))
             ->method('writeln')
             ->with(self::logicalOr(
@@ -64,10 +66,9 @@ final class StatusActionTest extends TestCase
                 self::stringContains('=========================')
             ));
 
-        // 4. Execute the action
         $result = $this->action->execute('STATUS', $this->outputMock);
 
-        // 5. Assert the action returns null (as it delegates directly to output)
+        // 4. Assert that the action returns null (as it delegates directly to the output)
         self::assertNull($result);
     }
 }

@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\VendingMachine\Infrastructure\Controller\Console\Presenter;
 
+use App\VendingMachine\Application\Command\ReturnCoinsResponse;
 use App\VendingMachine\Application\Query\MachineStateDTO;
-use App\VendingMachine\Domain\Model\Coin;
-use App\VendingMachine\Domain\Model\MoneyCollection;
 use Symfony\Component\Console\Output\OutputInterface;
 
 final class VendingMachinePresenter
@@ -35,16 +34,16 @@ final class VendingMachinePresenter
         $output->writeln("<info>=========================</info>\n");
     }
 
-    public function formatCoins(MoneyCollection $collection): string
+
+    public function formatReturnedCoins(ReturnCoinsResponse $response): string
     {
-        $coins = $collection->coins();
-        if ($coins === []) {
+        if ($response->returnedCoins === []) {
             return '';
         }
 
         $formatted = array_map(
-            static fn (Coin $coin) => $coin->amount() == 1.0 ? '1' : number_format($coin->amount(), 2, '.', ''),
-            $coins
+            static fn (float $coin) => $coin == 1.0 ? '1' : number_format($coin, 2, '.', ''),
+            $response->returnedCoins
         );
 
         return implode(', ', $formatted);

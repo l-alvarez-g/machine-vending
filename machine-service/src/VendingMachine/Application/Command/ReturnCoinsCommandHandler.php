@@ -15,18 +15,22 @@ final readonly class ReturnCoinsCommandHandler
 
     public function __invoke(ReturnCoinsCommand $command): ReturnCoinsResponse
     {
-        // 1. Hydrate the correct aggregate
         $machine = $this->repository->get($command->machineId);
 
-        // 2. Execute business logic
-        $returnedCoins = $machine->returnCoins();
+        // Domain logic: Returns the exact physical coins inserted
+        $returnedCollection = $machine->returnCoins();
 
-        // 3. Persist state changes
         $this->repository->save($machine);
 
-        // 4. Translate Domain Model to Application DTO to protect architectural boundaries
-        $totalReturnedAsFloat = $returnedCoins->totalInCents() / 100;
+        // Translate Domain Objects (Coins) to Application Primitives (floats)
+        $coinsFloats = array_map(
+            static fn ($coin) => $coin->amountInCents() / 100,
+            $returnedCollection->coins()
+        );
 
-        return new ReturnCoinsResponse($totalReturnedAsFloat);
+        return new ReturnCoinsResponse(
+            $coinsFloats,
+            $returnedCollection->totalInCents() / 100
+        );
     }
 }

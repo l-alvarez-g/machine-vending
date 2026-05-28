@@ -24,10 +24,16 @@ final readonly class VendProductCommandHandler
         // 3. Persist state changes
         $this->repository->save($machine);
 
+        $changeCoinsFloats = array_map(
+            static fn ($coin) => $coin->amountInCents() / 100,
+            $domainResult->change()->coins()
+        );
+
         // 4. Translate Domain Model to Application DTO protecting architectural boundaries
         return new VendProductResponse(
             $domainResult->product()->name(),
             $domainResult->product()->price(),
+            $changeCoinsFloats,
             $domainResult->change()->totalInCents() / 100
         );
     }

@@ -14,6 +14,7 @@ final readonly class VendProductResponse
     public function __construct(
         public string $productName,
         public float $productPrice,
+        public array $changeCoins,
         public float $changeReturned
     ) {
     }

@@ -15,7 +15,8 @@ interface ConsoleActionInterface
 
     /**
      * Executes the action.
-     * Returns a string if there is a response to accumulate (e.g., returned coins or product name), or null.
+     *
+     * @return string|null A string to accumulate (e.g., returned coins or product name), or null if no output is needed.
      */
     public function execute(string $tokenUpper, OutputInterface $output): ?string;
 }

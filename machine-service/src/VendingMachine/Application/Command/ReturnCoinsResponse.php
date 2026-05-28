@@ -7,9 +7,11 @@ namespace App\VendingMachine\Application\Command;
 final readonly class ReturnCoinsResponse
 {
     /**
-     * @param float $totalReturned The total amount returned formatted as float for external consumers.
+     * @param array<int, float> $returnedCoins List of individual coin values (e.g. [0.25, 0.10])
+     * @param float $totalReturned Total value refunded
      */
     public function __construct(
+        public array $returnedCoins,
         public float $totalReturned
     ) {
     }
