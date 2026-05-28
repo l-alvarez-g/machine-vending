@@ -71,7 +71,7 @@ Once the machine is initialized and ready, you can input commands separated by c
 **Example 4: Overpay for Soda**
 ```text
 > 1, 1, GET-SODA
--> SODA, 0.50
+-> SODA, 0.25, 0.25
 ```
 
 ---

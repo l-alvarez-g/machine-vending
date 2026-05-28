@@ -18,24 +18,29 @@ final readonly class ServiceMachineCommandHandler
 
     public function __invoke(ServiceMachineCommand $command): void
     {
-        $machine = $this->repository->get();
+        // 1. Retrieve the specific Aggregate Root
+        $machine = $this->repository->get($command->machineId);
 
+        // 2. Translate application primitives to Domain Value Objects using safe factories
         $coins = array_map(
-            static fn (float $amount): Coin => new Coin($amount),
+            static fn (float $amount): Coin => Coin::fromFloat($amount),
             $command->initialChangeCoins
         );
+
         $initialChange = new MoneyCollection(...$coins);
 
         $domainInventory = [];
         foreach ($command->inventory as $productName => $productData) {
             $domainInventory[(string) $productName] = [
-                'product' => new Product((string) $productName, (float) $productData['price']),
+                'product'  => Product::fromFloatPrice((string) $productName, (float) $productData['price']),
                 'quantity' => (int) $productData['quantity'],
             ];
         }
 
+        // 3. Delegate the business action to the Domain
         $machine->serviceMachine($initialChange, $domainInventory);
 
+        // 4. Persist the updated state
         $this->repository->save($machine);
     }
 }

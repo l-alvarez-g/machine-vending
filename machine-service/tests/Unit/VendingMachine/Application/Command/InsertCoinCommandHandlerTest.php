@@ -25,18 +25,24 @@ final class InsertCoinCommandHandlerTest extends TestCase
 
     public function testItInsertsCoinAndSavesState(): void
     {
+        $machineId = 'vm-uuid-001';
         $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
-        $machine = new VendingMachine($policy);
+        $machine = new VendingMachine($machineId, $policy);
 
+        // The handler must request the exact machine ID
         $this->repository->expects($this->once())
             ->method('get')
+            ->with($machineId)
             ->willReturn($machine);
 
+        // The handler must save the identical aggregate instance
         $this->repository->expects($this->once())
             ->method('save')
-            ->with($this->equalTo($machine));
+            ->with($this->identicalTo($machine));
 
-        $command = new InsertCoinCommand(1.0);
+        // The Application boundary receives floats (1.00 dollar), 
+        // translating it to cents internally.
+        $command = new InsertCoinCommand($machineId, 1.00);
         $this->handler->__invoke($command);
 
         $this->assertSame(100, $machine->returnCoins()->totalInCents());

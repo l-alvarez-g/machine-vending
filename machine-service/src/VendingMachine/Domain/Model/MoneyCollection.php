@@ -6,7 +6,8 @@ namespace App\VendingMachine\Domain\Model;
 
 final readonly class MoneyCollection
 {
-    /** @var Coin[] */
+    /** * @var list<Coin> 
+     */
     private array $coins;
 
     public function __construct(Coin ...$coins)
@@ -26,16 +27,15 @@ final readonly class MoneyCollection
 
     public function totalInCents(): int
     {
-        $total = 0;
-        foreach ($this->coins as $coin) {
-            $total += $coin->amountInCents;
-        }
-
-        return $total;
+        return array_reduce(
+            $this->coins,
+            static fn (int $total, Coin $coin): int => $total + $coin->amountInCents(),
+            0
+        );
     }
 
     /**
-     * @return Coin[]
+     * @return list<Coin>
      */
     public function coins(): array
     {

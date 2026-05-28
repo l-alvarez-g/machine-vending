@@ -12,6 +12,7 @@ use App\VendingMachine\Domain\Model\MoneyCollection;
 use App\VendingMachine\Domain\Model\Product;
 use App\VendingMachine\Domain\Model\VendingMachine;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -20,17 +21,21 @@ final class GetMachineStateQueryHandlerTest extends TestCase
     public function testItReturnsMachineStateDtoWithCorrectlyMappedData(): void
     {
         // 1. Arrange: Only mock the Infrastructure contract (Repository)
+        /** @var VendingMachineRepositoryInterface&MockObject $repositoryMock */
         $repositoryMock = $this->createMock(VendingMachineRepositoryInterface::class);
 
-        // Create REAL domain objects
-        $productWater = new Product('WATER', 0.65);
-        $coins = [new Coin(0.25), new Coin(0.25), new Coin(0.10)];
+        $machineId = 'vm-uuid-001';
+
+        // Create REAL domain objects using pure integers (cents)
+        $productWater = new Product('WATER', 65);
+        $coins = [new Coin(25), new Coin(25), new Coin(10)];
 
         // Use Reflection to hydrate state directly without confusing PHPStan
+        // and isolating the read-model test from write-model logic.
         $vaultReflection = new ReflectionClass(MoneyCollection::class);
         $vault = $vaultReflection->newInstanceWithoutConstructor();
 
-        // Hydrate vault property (Ensure 'coins' matches your internal property name in MoneyCollection)
+        // Hydrate vault property
         $vaultReflection->getProperty('coins')->setValue($vault, $coins);
 
         $machineReflection = new ReflectionClass(VendingMachine::class);
@@ -40,7 +45,7 @@ final class GetMachineStateQueryHandlerTest extends TestCase
         $machineReflection->getProperty('vault')->setValue($machine, $vault);
         $machineReflection->getProperty('inventory')->setValue($machine, [
             'WATER' => [
-                'product' => $productWater,
+                'product'  => $productWater,
                 'quantity' => 10
             ]
         ]);
@@ -48,26 +53,29 @@ final class GetMachineStateQueryHandlerTest extends TestCase
         // The mock repository returns our perfectly hydrated REAL Aggregate Root
         $repositoryMock->expects($this->once())
             ->method('get')
+            ->with($machineId)
             ->willReturn($machine);
 
         // 2. Act: Execute the Handler
         $handler = new GetMachineStateQueryHandler($repositoryMock);
-        $dto = $handler->__invoke(new GetMachineStateQuery());
+        $query = new GetMachineStateQuery($machineId);
+
+        $dto = $handler->__invoke($query);
 
         // 3. Assert: Verify the DTO structure and values
         $this->assertInstanceOf(MachineStateDTO::class, $dto);
 
-        // Assert Vault sorting and counting logic
+        // Assert Vault sorting and counting logic (Handler maps cents to float strings)
         $expectedVault = [
             '0.25' => 2,
             '0.10' => 1
         ];
         $this->assertSame($expectedVault, $dto->vaultCoins);
 
-        // Assert Inventory price mapping (converting cents to float)
+        // Assert Inventory price mapping (converting cents back to float for external consumers)
         $expectedInventory = [
             'WATER' => [
-                'price' => 0.65,
+                'price'    => 0.65,
                 'quantity' => 10
             ]
         ];

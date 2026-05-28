@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Tests\Unit\VendingMachine\Domain\Model;
@@ -10,48 +11,79 @@ use PHPUnit\Framework\TestCase;
 
 final class CoinTest extends TestCase
 {
-    #[DataProvider('validCoinsProvider')]
-    public function testItCanBeCreatedWithValidValues(float $inputValue, int $expectedCents): void
+    #[DataProvider('validCentsProvider')]
+    public function testItCanBeCreatedWithValidCents(int $cents): void
     {
-        $coin = new Coin($inputValue);
+        $coin = new Coin($cents);
 
-        $this->assertSame($expectedCents, $coin->amountInCents);
-        $this->assertSame($inputValue, $coin->amount());
+        $this->assertSame($cents, $coin->amountInCents());
+        $this->assertSame((float) ($cents / 100), $coin->amount());
     }
 
     /**
-     * @return array<string, array{0: float|int, 1: int}>
+     * @return array<string, array{0: int}>
      */
-    public static function validCoinsProvider(): array
+    public static function validCentsProvider(): array
     {
         return [
-            'Nickel'      => [0.05, 5],
-            'Dime'        => [0.10, 10],
-            'Quarter'     => [0.25, 25],
-            'Half Dollar' => [0.50, 50], // Proving the new domain flexibility
-            'Dollar'      => [1.0, 100],
-            'Dollar as Integer (1.0 casted)' => [1, 100],
+            'Nickel'      => [5],
+            'Dime'        => [10],
+            'Quarter'     => [25],
+            'Half Dollar' => [50],
+            'Dollar'      => [100],
         ];
     }
 
-    #[DataProvider('invalidCoinsProvider')]
-    public function testItThrowsExceptionForInvalidCoin(float $invalidValue): void
+    #[DataProvider('validFloatsProvider')]
+    public function testItCanBeCreatedFromFloatSafely(float $inputValue, int $expectedCents): void
+    {
+        $coin = Coin::fromFloat($inputValue);
+
+        $this->assertSame($expectedCents, $coin->amountInCents());
+    }
+
+    /**
+     * @return array<string, array{0: float, 1: int}>
+     */
+    public static function validFloatsProvider(): array
+    {
+        return [
+            'Nickel'  => [0.05, 5],
+            'Quarter' => [0.25, 25],
+            'Dollar'  => [1.0, 100],
+        ];
+    }
+
+    #[DataProvider('invalidCentsProvider')]
+    public function testItThrowsExceptionForInvalidCents(int $invalidCents): void
     {
         $this->expectException(InvalidCoinException::class);
-        $this->expectExceptionMessage(sprintf('Invalid coin value: %s', $invalidValue));
+        $this->expectExceptionMessage(
+            sprintf('Invalid coin denomination. Amount must be strictly positive, got: %d cents.', $invalidCents)
+        );
 
-        new Coin($invalidValue);
+        new Coin($invalidCents);
     }
 
     /**
-     * @return array<string, array{0: float|int}>
+     * @return array<string, array{0: int}>
      */
-    public static function invalidCoinsProvider(): array
+    public static function invalidCentsProvider(): array
     {
         return [
-            'Zero value'     => [0.0],
-            'Negative value' => [-0.25],
-            'Deep negative'  => [-5.0],
+            'Zero value'     => [0],
+            'Negative value' => [-25],
+            'Deep negative'  => [-500],
         ];
+    }
+
+    public function testValueObjectEquality(): void
+    {
+        $coinA = new Coin(25);
+        $coinB = new Coin(25);
+        $coinC = new Coin(50);
+
+        $this->assertTrue($coinA->equals($coinB), 'Coins with the same cents should be equal.');
+        $this->assertFalse($coinA->equals($coinC), 'Coins with different cents should not be equal.');
     }
 }

@@ -11,9 +11,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final readonly class StatusAction implements ConsoleActionInterface
 {
+    /**
+     * @param string $machineId Injected via PHP-DI container config
+     */
     public function __construct(
         private GetMachineStateQueryHandler $queryHandler,
-        private VendingMachinePresenter $presenter
+        private VendingMachinePresenter $presenter,
+        private string $machineId
     ) {
     }
 
@@ -24,7 +28,10 @@ final readonly class StatusAction implements ConsoleActionInterface
 
     public function execute(string $tokenUpper, OutputInterface $output): ?string
     {
-        $state = $this->queryHandler->__invoke(new GetMachineStateQuery());
+        // 1. Execute Query with explicit identity
+        $state = $this->queryHandler->__invoke(new GetMachineStateQuery($this->machineId));
+
+        // 2. Delegate to the Presenter
         $this->presenter->displayStatus($output, 'CURRENT MACHINE STATE', $state);
 
         return null;

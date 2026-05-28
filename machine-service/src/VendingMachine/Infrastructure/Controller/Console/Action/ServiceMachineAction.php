@@ -15,11 +15,15 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final readonly class ServiceMachineAction implements ConsoleActionInterface
 {
+    /**
+     * @param string $machineId Injected via PHP-DI container config
+     */
     public function __construct(
         private ServiceMachineCommandHandler $commandHandler,
         private GetMachineStateQueryHandler $queryHandler,
         private ServicePayloadParser $parser,
-        private VendingMachinePresenter $presenter
+        private VendingMachinePresenter $presenter,
+        private string $machineId
     ) {
     }
 
@@ -30,7 +34,6 @@ final readonly class ServiceMachineAction implements ConsoleActionInterface
 
     public function execute(string $tokenUpper, OutputInterface $output): ?string
     {
-
         if (preg_match('/^SERVICE\[(.*)\]$/', $tokenUpper, $matches) !== 1) {
             return null;
         }
@@ -38,17 +41,23 @@ final readonly class ServiceMachineAction implements ConsoleActionInterface
         $payload = $matches[1];
 
         try {
-            $currentState = $this->queryHandler->__invoke(new GetMachineStateQuery());
+            // 1. Fetch current state passing the explicit machine identity
+            $currentState = $this->queryHandler->__invoke(new GetMachineStateQuery($this->machineId));
+
+            // 2. Parse the CLI payload
             $parsedData = $this->parser->parse($payload, $currentState);
 
+            // 3. Dispatch the command with the identity
             $this->commandHandler->__invoke(new ServiceMachineCommand(
+                $this->machineId,
                 $parsedData['coins'], 
                 $parsedData['inventory']
             ));
 
             $output->writeln('<comment>Machine Serviced successfully.</comment>');
 
-            $newState = $this->queryHandler->__invoke(new GetMachineStateQuery());
+            // 4. Fetch the new state and present it
+            $newState = $this->queryHandler->__invoke(new GetMachineStateQuery($this->machineId));
             $this->presenter->displayStatus($output, 'STATE AFTER SERVICE', $newState);
 
         } catch (InvalidArgumentException $exception) {

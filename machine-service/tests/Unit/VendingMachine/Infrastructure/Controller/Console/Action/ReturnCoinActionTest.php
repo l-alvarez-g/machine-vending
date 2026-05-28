@@ -6,6 +6,7 @@ namespace App\Tests\Unit\VendingMachine\Infrastructure\Controller\Console\Action
 
 use App\VendingMachine\Application\Command\ReturnCoinsCommandHandler;
 use App\VendingMachine\Domain\Model\AcceptedCoinsPolicy;
+use App\VendingMachine\Domain\Model\Coin;
 use App\VendingMachine\Domain\Model\VendingMachine;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 use App\VendingMachine\Infrastructure\Controller\Console\Action\ReturnCoinAction;
@@ -19,21 +20,22 @@ final class ReturnCoinActionTest extends TestCase
     private VendingMachineRepositoryInterface&MockObject $repositoryMock;
     private OutputInterface&MockObject $outputMock;
     private ReturnCoinAction $action;
+    private const MACHINE_ID = 'cli-machine-001';
 
     protected function setUp(): void
     {
-        // 1. Mock the Infrastructure Port (Interface)
+        // 1. Mock the Infrastructure Port
         $this->repositoryMock = $this->createMock(VendingMachineRepositoryInterface::class);
         $this->outputMock = $this->createMock(OutputInterface::class);
 
-        // 2. Instantiate the REAL Application layer handler
+        // 2. Instantiate the real Application layer handler
         $handler = new ReturnCoinsCommandHandler($this->repositoryMock);
 
-        // 3. Instantiate the REAL Presenter
+        // 3. Instantiate the real Presenter
         $presenter = new VendingMachinePresenter();
 
-        // 4. Instantiate the Console Action
-        $this->action = new ReturnCoinAction($handler, $presenter);
+        // 4. Instantiate the Console Action, injecting the machine ID
+        $this->action = new ReturnCoinAction($handler, $presenter, self::MACHINE_ID);
     }
 
     public function testItSupportsReturnCoinToken(): void
@@ -44,27 +46,28 @@ final class ReturnCoinActionTest extends TestCase
 
     public function testItExecutesReturnCoinsAndFormatsOutput(): void
     {
-        // 1. Instantiate the REAL VendingMachine using the exact policy you discovered earlier
         $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
-        $realMachine = new VendingMachine($policy);
+        $realMachine = new VendingMachine(self::MACHINE_ID, $policy);
 
-        // Optional: If you want to test returning specific coins, insert them into $realMachine right here
-        // using your domain methods (e.g., $realMachine->insertCoin(...)). 
+        // Simulate coin insertion to test the return functionality
+        $realMachine->insertCoin(new Coin(25));
+        $realMachine->insertCoin(new Coin(10));
 
-        // 2. The repository will return our real machine
+        // The repository should return our real machine instance
         $this->repositoryMock->expects(self::once())
             ->method('get')
+            ->with(self::MACHINE_ID)
             ->willReturn($realMachine);
 
-        // 3. The repository should save the machine after the operation
+        // The repository should save the machine state after the return operation
         $this->repositoryMock->expects(self::once())
             ->method('save')
-            ->with(self::isInstanceOf(VendingMachine::class));
+            ->with(self::identicalTo($realMachine));
 
-        // 4. Execute the action
+        // The Action executes the handler and uses the Presenter
         $result = $this->action->execute('RETURN-COIN', $this->outputMock);
 
-        // 5. Assert the expected output. A fresh machine returns an empty collection.
-        self::assertSame('', $result);
+        // Validate the exact formatted output: "0.25, 0.10"
+        self::assertSame('0.25, 0.10', $result);
     }
 }

@@ -18,20 +18,20 @@ final class InsertCoinActionTest extends TestCase
     private VendingMachineRepositoryInterface&MockObject $repositoryMock;
     private OutputInterface&MockObject $outputMock;
     private InsertCoinAction $action;
+    private const MACHINE_ID = 'cli-machine-001';
 
     protected function setUp(): void
     {
-        // 1. Mock the Infrastructure Port (Interface), which is completely valid in PHPUnit
+        // 1. Mock the Infrastructure Port
         $this->repositoryMock = $this->createMock(VendingMachineRepositoryInterface::class);
         $this->outputMock = $this->createMock(OutputInterface::class);
 
-        // 2. Instantiate the REAL Application layer handler with the mocked repository
+        // 2. Instantiate the real Application layer handler
         $handler = new InsertCoinCommandHandler($this->repositoryMock);
+        $validCoins = ['0.05', '0.10', '0.25', '1.00'];
 
-        $validCoins = ['0.05', '0.10', '0.25', '1'];
-
-        // 3. Instantiate the Console Action
-        $this->action = new InsertCoinAction($handler, $validCoins);
+        // 3. Inject the Machine ID into the Action
+        $this->action = new InsertCoinAction($handler, $validCoins, self::MACHINE_ID);
     }
 
     public function testItSupportsNumericTokens(): void
@@ -44,16 +44,17 @@ final class InsertCoinActionTest extends TestCase
     public function testItExecutesValidCoinInsertion(): void
     {
         $policy = new AcceptedCoinsPolicy([5, 10, 25, 100]);
-        $dummyMachine = new VendingMachine($policy);
+        $dummyMachine = new VendingMachine(self::MACHINE_ID, $policy);
 
-        // El resto del test se mantiene idéntico
+        // Verify the repository is queried with the correct Machine ID
         $this->repositoryMock->expects(self::once())
             ->method('get')
+            ->with(self::MACHINE_ID)
             ->willReturn($dummyMachine);
 
         $this->repositoryMock->expects(self::once())
             ->method('save')
-            ->with(self::isInstanceOf(VendingMachine::class));
+            ->with(self::identicalTo($dummyMachine));
 
         $this->outputMock->expects(self::never())->method('writeln');
 
@@ -64,7 +65,7 @@ final class InsertCoinActionTest extends TestCase
 
     public function testItRejectsInvalidCoinValues(): void
     {
-        // If the coin is invalid, the handler should NEVER be called (no DB interactions)
+        // If the coin is invalid, the handler should never be called (no database interaction)
         $this->repositoryMock->expects(self::never())->method('get');
         $this->repositoryMock->expects(self::never())->method('save');
 

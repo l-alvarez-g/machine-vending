@@ -10,13 +10,21 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final readonly class InsertCoinAction implements ConsoleActionInterface
 {
+    /** @var array<int, float> */
+    private array $validCoinsFloat;
+
     /**
-     * @param array<int, string|float> $validCoins
+     * @param InsertCoinCommandHandler $handler
+     * @param array<int, string> $validCoins Array of raw config strings (e.g. ['0.05', '1.00'])
+     * @param string $machineId The fixed ID for the CLI machine instance
      */
     public function __construct(
         private InsertCoinCommandHandler $handler,
-        private array $validCoins
+        private array $validCoins,
+        private string $machineId
     ) {
+        // Pre-compute float values once for performance
+        $this->validCoinsFloat = array_map('floatval', $this->validCoins);
     }
 
     public function supports(string $tokenUpper): bool
@@ -26,10 +34,12 @@ final readonly class InsertCoinAction implements ConsoleActionInterface
 
     public function execute(string $tokenUpper, OutputInterface $output): ?string
     {
-        $validCoinsFloat = array_map('floatval', $this->validCoins);
+        $coinValue = (float) $tokenUpper;
 
-        if (in_array((float) $tokenUpper, $validCoinsFloat, true)) {
-            $this->handler->__invoke(new InsertCoinCommand((float) $tokenUpper));
+        // Early return/filter to avoid unnecessary domain hydration for obvious garbage
+        if (in_array($coinValue, $this->validCoinsFloat, true)) {
+            // Dispatch the Command with the proper Aggregate Identity
+            $this->handler->__invoke(new InsertCoinCommand($this->machineId, $coinValue));
             return null;
         }
 

@@ -13,37 +13,29 @@ final readonly class GetMachineStateQueryHandler
     ) {
     }
 
-    /**
-     * @param GetMachineStateQuery $query
-     * * Note: Although $query is unused in the method body (since there is only one machine),
-     * it MUST be kept in the signature. In CQRS and Message Bus architectures (like
-     * Symfony Messenger or Tactician), the type-hint of the argument is used as the
-     * routing mechanism to map the dispatched message to this specific handler.
-     */
     public function __invoke(GetMachineStateQuery $query): MachineStateDTO
     {
-        $machine = $this->repository->get();
+        // Pragmatic CQRS: Hydrating the aggregate for reading.
+        // In a highly scaled system, this would query a Read Model (e.g., DBAL projection) directly.
+        $machine = $this->repository->get($query->machineId);
 
-        // 1. Map the vault (Available Change)
         /** @var array<string, int> $coinCounts */
         $coinCounts = [];
 
         foreach ($machine->vault()->coins() as $coin) {
-            // Formatting to 2 decimals prevents PHP from automatically coercing 
-            // whole number strings (like "1" for a dollar) into integers.
-            // This strictly satisfies the array<string, int> contract of the DTO.
+            // Formatting ensures strict string keys to satisfy array<string, int> contract
             $valStr = number_format($coin->amount(), 2, '.', '');
             $coinCounts[$valStr] = ($coinCounts[$valStr] ?? 0) + 1;
         }
 
-        // Sort keys descending (highest coin value first)
         krsort($coinCounts);
 
-        // 2. Map the inventory (Products)
+        /** @var array<string, array{price: float, quantity: int}> $inventoryDTO */
         $inventoryDTO = [];
+
         foreach ($machine->inventory() as $name => $data) {
-            $inventoryDTO[$name] = [
-                'price' => $data['product']->priceInCents / 100,
+            $inventoryDTO[(string) $name] = [
+                'price'    => $data['product']->priceInCents() / 100, // Fixed: using encapsulated accessor
                 'quantity' => $data['quantity']
             ];
         }

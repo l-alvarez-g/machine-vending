@@ -8,28 +8,59 @@ use App\VendingMachine\Domain\Exception\InvalidProductException;
 
 final readonly class Product
 {
-    public int $priceInCents;
+    private string $name;
+    private int $priceInCents;
 
-    public function __construct(
-        public string $name,
-        float $price
-    ) {
-        if (trim($name) === '') {
-            throw new InvalidProductException('Product name cannot be empty');
+    /**
+     * @throws InvalidProductException
+     */
+    public function __construct(string $name, int $priceInCents)
+    {
+        $sanitizedName = trim($name);
+
+        if ($sanitizedName === '') {
+            throw InvalidProductException::forEmptyName();
         }
-
-        // Safe conversion avoiding float precision loss
-        $priceInCents = (int) round($price * 100);
 
         if ($priceInCents <= 0) {
-            throw new InvalidProductException('Product price must be greater than zero');
+            throw InvalidProductException::forInvalidPrice($priceInCents);
         }
 
+        // Assignment happens after validation and sanitization
+        $this->name = $sanitizedName;
         $this->priceInCents = $priceInCents;
+    }
+
+    /**
+     * Creates a Product from a float price safely.
+     *
+     * @throws InvalidProductException
+     */
+    public static function fromFloatPrice(string $name, float $price): self
+    {
+        $priceInCents = (int) round($price * 100);
+
+        return new self($name, $priceInCents);
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function priceInCents(): int
+    {
+        return $this->priceInCents;
     }
 
     public function price(): float
     {
         return $this->priceInCents / 100;
+    }
+
+    public function equals(self $other): bool
+    {
+        return $this->name === $other->name() 
+            && $this->priceInCents === $other->priceInCents();
     }
 }

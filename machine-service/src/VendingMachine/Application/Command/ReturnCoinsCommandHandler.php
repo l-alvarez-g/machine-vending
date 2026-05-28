@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\VendingMachine\Application\Command;
 
-use App\VendingMachine\Domain\Model\MoneyCollection;
 use App\VendingMachine\Domain\Repository\VendingMachineRepositoryInterface;
 
 final readonly class ReturnCoinsCommandHandler
@@ -14,14 +13,24 @@ final readonly class ReturnCoinsCommandHandler
     ) {
     }
 
-    public function __invoke(ReturnCoinsCommand $command): MoneyCollection
+    public function __invoke(ReturnCoinsCommand $command): ReturnCoinsResponse
     {
-        $machine = $this->repository->get();
+        $machine = $this->repository->get($command->machineId);
 
-        $returnedCoins = $machine->returnCoins();
+        // Domain logic: Returns the exact physical coins inserted
+        $returnedCollection = $machine->returnCoins();
 
         $this->repository->save($machine);
 
-        return $returnedCoins;
+        // Translate Domain Objects (Coins) to Application Primitives (floats)
+        $coinsFloats = array_map(
+            static fn ($coin) => $coin->amountInCents() / 100,
+            $returnedCollection->coins()
+        );
+
+        return new ReturnCoinsResponse(
+            $coinsFloats,
+            $returnedCollection->totalInCents() / 100
+        );
     }
 }
