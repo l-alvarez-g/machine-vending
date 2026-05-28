@@ -7,8 +7,8 @@ namespace App\VendingMachine\Domain\Model;
 use App\VendingMachine\Domain\Exception\InsufficientFundsException;
 use App\VendingMachine\Domain\Exception\OutOfStockException;
 use App\VendingMachine\Domain\Exception\ExactChangeNotAvailableException;
-// Hypothetical Domain Event interface
-// use App\Shared\Domain\Event\DomainEvent; 
+use App\VendingMachine\Domain\Event\MachineServicedEvent;
+use App\Shared\Domain\Event\DomainEvent;
 
 final class VendingMachine
 {
@@ -18,7 +18,7 @@ final class VendingMachine
     /** @var array<string, array{product: Product, quantity: int}> */
     private array $inventory = [];
 
-    /** @var array<int, object> List of Domain Events recorded by the Aggregate */
+    /** @var list<DomainEvent> List of Domain Events recorded by the Aggregate */
     private array $domainEvents = [];
 
     public function __construct(
@@ -42,7 +42,7 @@ final class VendingMachine
         $this->vault = $initialChange;
         $this->inventory = $inventory;
 
-        // Example: $this->record(new MachineServicedEvent($this->id));
+        $this->record(new MachineServicedEvent($this->id));
     }
 
     public function insertCoin(Coin $coin): void
@@ -154,14 +154,14 @@ final class VendingMachine
     /**
      * Records a domain event to be dispatched later by the application layer or infrastructure.
      */
-    private function record(object $domainEvent): void
+    private function record(DomainEvent $domainEvent): void
     {
         $this->domainEvents[] = $domainEvent;
     }
 
     /**
      * Retrieves and clears the recorded domain events.
-     * * @return array<int, object>
+     * @return list<DomainEvent>
      */
     public function pullDomainEvents(): array
     {

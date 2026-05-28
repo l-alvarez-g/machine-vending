@@ -6,7 +6,8 @@ namespace App\VendingMachine\Domain\Model;
 
 final readonly class MoneyCollection
 {
-    /** * @var list<Coin> 
+    /**
+     * @var list<Coin>
      */
     private array $coins;
 

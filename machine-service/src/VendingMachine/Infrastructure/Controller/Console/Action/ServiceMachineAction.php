@@ -50,7 +50,7 @@ final readonly class ServiceMachineAction implements ConsoleActionInterface
             // 3. Dispatch the command with the identity
             $this->commandHandler->__invoke(new ServiceMachineCommand(
                 $this->machineId,
-                $parsedData['coins'], 
+                array_values($parsedData['coins']),
                 $parsedData['inventory']
             ));
 
