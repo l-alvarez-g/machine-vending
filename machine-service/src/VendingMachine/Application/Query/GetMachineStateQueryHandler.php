@@ -35,7 +35,7 @@ final readonly class GetMachineStateQueryHandler
 
         foreach ($machine->inventory() as $name => $data) {
             $inventoryDTO[(string) $name] = [
-                'price'    => $data['product']->priceInCents() / 100, // Fixed: using encapsulated accessor
+                'price'    => $data['product']->priceInCents() / 100,
                 'quantity' => $data['quantity']
             ];
         }

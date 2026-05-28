@@ -126,4 +126,6 @@ docker exec -it machine_service_php vendor/bin/phpunit
 **Run Static Analysis (PHPStan Level 9 Strict):**
 ```bash
 docker exec -it machine_service_php vendor/bin/phpstan analyse --ansi
+
+docker exec -it machine_service_php vendor/bin/phpstan analyse --ansi --memory-limit=512M
 ```

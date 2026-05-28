@@ -72,7 +72,7 @@ final class VendingMachineCommand extends Command
         // 3. Service the machine
         $this->serviceMachineHandler->__invoke(new ServiceMachineCommand(
             $this->machineId,
-            $this->initialChangeCoins,
+            array_values($this->initialChangeCoins),
             $hydratedInventory
         ));
 

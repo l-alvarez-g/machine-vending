@@ -9,6 +9,7 @@ final readonly class VendProductResponse
     /**
      * @param string $productName
      * @param float $productPrice
+     * @param float[] $changeCoins
      * @param float $changeReturned
      */
     public function __construct(
